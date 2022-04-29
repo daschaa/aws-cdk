@@ -1,9 +1,10 @@
+import { Template } from '@aws-cdk/assertions';
 import * as ccommit from '@aws-cdk/aws-codecommit';
 import * as sqs from '@aws-cdk/aws-sqs';
 import * as cdk from '@aws-cdk/core';
 import { Construct } from 'constructs';
 import * as cdkp from '../../lib';
-import { PIPELINE_ENV, TestApp } from '../testhelpers';
+import { PIPELINE_ENV, TestApp, ModernTestGitHubNpmPipeline, FileAssetApp } from '../testhelpers';
 
 let app: TestApp;
 
@@ -52,22 +53,74 @@ describe('CodePipeline support stack reuse', () => {
     const supportStackAArtifact = assembly.getStackByName(`PipelineStackA-support-${testStageEnv.region}`);
     const supportStackBArtifact = assembly.getStackByName(`PipelineStackB-support-${testStageEnv.region}`);
 
-    const supportStackATemplate = supportStackAArtifact.template;
-    expect(supportStackATemplate).toHaveResourceLike('AWS::S3::Bucket', {
+    const supportStackATemplate = Template.fromJSON(supportStackAArtifact.template);
+    supportStackATemplate.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: 'pipelinestacka-support-useplicationbucket80db3753a0ebbf052279',
     });
-    expect(supportStackATemplate).toHaveResourceLike('AWS::KMS::Alias', {
+    supportStackATemplate.hasResourceProperties('AWS::KMS::Alias', {
       AliasName: 'alias/pport-ustencryptionalias5cad45754e1ff088476b',
     });
 
-    const supportStackBTemplate = supportStackBArtifact.template;
-    expect(supportStackBTemplate).toHaveResourceLike('AWS::S3::Bucket', {
+    const supportStackBTemplate = Template.fromJSON(supportStackBArtifact.template);
+    supportStackBTemplate.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: 'pipelinestackb-support-useplicationbucket1d556ec7f959b336abf8',
     });
-    expect(supportStackBTemplate).toHaveResourceLike('AWS::KMS::Alias', {
+    supportStackBTemplate.hasResourceProperties('AWS::KMS::Alias', {
       AliasName: 'alias/pport-ustencryptionalias668c7ffd0de17c9867b0',
     });
   });
+});
+
+test('Policy sizes do not exceed the maximum size', () => {
+  const pipelineStack = new cdk.Stack(app, 'PipelineStack', { env: PIPELINE_ENV });
+  pipelineStack.node.setContext('@aws-cdk/aws-iam:minimizePolicies', true);
+  const pipeline = new ModernTestGitHubNpmPipeline(pipelineStack, 'Cdk', {
+    crossAccountKeys: true,
+  });
+
+  // WHEN
+  const regions = ['us-east-1', 'us-east-2', 'eu-west-1', 'eu-west-2', 'somethingelse1', 'somethingelse-2', 'yapregion', 'more-region'];
+  for (let i = 0; i < 70; i++) {
+    pipeline.addStage(new FileAssetApp(pipelineStack, `App${i}`, {
+      env: {
+        account: `account${i}`,
+        region: regions[i % regions.length],
+      },
+    }), {
+      post: [
+        new cdkp.ShellStep('DoAThing', { commands: ['true'] }),
+        new cdkp.ShellStep('DoASecondThing', { commands: ['false'] }),
+      ],
+    });
+  }
+
+  // THEN
+  const template = Template.fromStack(pipelineStack);
+
+  // Collect policies by role
+  const rolePolicies: Record<string, any[]> = {};
+  for (const pol of Object.values(template.findResources('AWS::IAM::Policy'))) {
+    for (const roleName of pol.Properties?.Roles ?? []) {
+      const roleLogicalId = roleName.Ref; // Roles: [ { Ref: MyRole } ]
+      if (!roleLogicalId) { continue; }
+
+      if (!rolePolicies[roleLogicalId]) {
+        rolePolicies[roleLogicalId] = [];
+      }
+
+      rolePolicies[roleLogicalId].push(pol.Properties.PolicyDocument);
+    }
+  }
+
+  // Validate sizes
+  for (const [logId, poldocs] of Object.entries(rolePolicies)) {
+    // Not entirely accurate, because our "Ref"s and "Fn::GetAtt"s actually need to be evaluated
+    // to ARNs... but it gives a good indication.
+    const totalJson = JSON.stringify(poldocs);
+    if (totalJson.length > 10000) {
+      throw new Error(`Policy for Role ${logId} is too large (${totalJson.length} bytes): ${JSON.stringify(poldocs, undefined, 2)}`);
+    }
+  }
 });
 
 interface ReuseCodePipelineStackProps extends cdk.StackProps {

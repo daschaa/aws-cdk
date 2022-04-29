@@ -49,11 +49,11 @@ describe('new style synthesis', () => {
     expect(firstFile).toEqual({
       source: { path: 'Stack.template.json', packaging: 'file' },
       destinations: {
-        'current_account-current_region': {
+        'current_account-current_region': expect.objectContaining({
           bucketName: 'cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}',
           objectKey: templateObjectKey,
           assumeRoleArn: 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}',
-        },
+        }),
       },
     });
 
@@ -261,6 +261,9 @@ describe('new style synthesis', () => {
       objectKey: 'file-asset-hash.js',
       assumeRoleArn: 'file:role:arn',
       assumeRoleExternalId: 'file-external-id',
+      assumeRoleTags: {
+        'aws-cdk:bootstrap-role': 'file-publishing',
+      },
     });
 
     expect(manifest.dockerImages?.['docker-asset-hash']?.destinations?.['current_account-current_region']).toEqual({
@@ -268,9 +271,10 @@ describe('new style synthesis', () => {
       imageTag: 'docker-asset-hash',
       assumeRoleArn: 'image:role:arn',
       assumeRoleExternalId: 'image-external-id',
+      assumeRoleTags: {
+        'aws-cdk:bootstrap-role': 'image-publishing',
+      },
     });
-
-
   });
 
   test('customize deploy role externalId', () => {
@@ -323,18 +327,47 @@ describe('new style synthesis', () => {
     const manifest = readAssetManifest(getAssetManifest(asm));
 
     // THEN
-    expect(manifest.files?.['file-asset-hash-with-prefix']?.destinations?.['current_account-current_region']).toEqual({
+    expect(manifest.files?.['file-asset-hash-with-prefix']?.destinations?.['current_account-current_region']).toEqual(expect.objectContaining({
       bucketName: 'file-asset-bucket',
       objectKey: '000000000000/file-asset-hash-with-prefix.js',
       assumeRoleArn: 'file:role:arn',
       assumeRoleExternalId: 'file-external-id',
-    });
+    }));
 
     const templateHash = last(stackArtifact.stackTemplateAssetObjectUrl?.split('/'));
 
     expect(stackArtifact.stackTemplateAssetObjectUrl).toEqual(`s3://file-asset-bucket/000000000000/${templateHash}`);
+  });
 
+  test('tags are present for all roles by default', () => {
+    // GIVEN
+    const myapp = new App();
 
+    // WHEN
+    const mystack = new Stack(myapp, 'mystack', {
+      synthesizer: new DefaultStackSynthesizer(),
+    });
+
+    mystack.synthesizer.addFileAsset({
+      fileName: __filename,
+      packaging: FileAssetPackaging.FILE,
+      sourceHash: 'asdf',
+    });
+
+    mystack.synthesizer.addDockerImageAsset({
+      directoryName: 'some-folder',
+      sourceHash: 'xyz',
+    });
+
+    // THEN
+    const asm = myapp.synth();
+    const assets = readAssetManifest(getAssetManifest(asm));
+
+    const stackArtifact = asm.getStackByName(mystack.stackName);
+    expect(stackArtifact.assumeRoleTags).toEqual({ 'aws-cdk:bootstrap-role': 'deploy' });
+    expect(stackArtifact.lookupRole?.tags).toEqual({ 'aws-cdk:bootstrap-role': 'lookup' });
+    expect(assets.files?.asdf?.destinations?.['current_account-current_region'].assumeRoleTags).toEqual({ 'aws-cdk:bootstrap-role': 'file-publishing' });
+    expect(assets.dockerImages?.xyz?.destinations?.['current_account-current_region'].assumeRoleTags).toEqual({ 'aws-cdk:bootstrap-role': 'image-publishing' });
   });
 
   test('synthesis with dockerPrefix', () => {

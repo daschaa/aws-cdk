@@ -76,6 +76,15 @@ export interface DefaultStackSynthesizerProps {
   readonly fileAssetPublishingExternalId?: string;
 
   /**
+   * Tags associated with the file asset publishing role
+   *
+   * This information may be used to create IAM policies targeting this role.
+   *
+   * @default DefaultStackSynthesizer.DEFAULT_FILE_ASSET_PUBLISHING_ROLE_TAGS
+   */
+  readonly fileAssetPublishingRoleTags?: Record<string, string>;
+
+  /**
    * The role to use to publish image assets to the ECR repository in this environment
    *
    * You must supply this if you have given a non-standard name to the publishing role.
@@ -87,6 +96,15 @@ export interface DefaultStackSynthesizerProps {
    * @default DefaultStackSynthesizer.DEFAULT_IMAGE_ASSET_PUBLISHING_ROLE_ARN
    */
   readonly imageAssetPublishingRoleArn?: string;
+
+  /**
+   * Tags associated with the image asset publishing role
+   *
+   * This information may be used to create IAM policies targeting this role.
+   *
+   * @default DefaultStackSynthesizer.DEFAULT_IMAGE_ASSET_PUBLISHING_ROLE_TAGS
+   */
+  readonly imageAssetPublishingRoleTags?: Record<string, string>;
 
   /**
    * The role to use to look up values from the target AWS account during synthesis
@@ -101,6 +119,15 @@ export interface DefaultStackSynthesizerProps {
    * @default - No external ID
    */
   readonly lookupRoleExternalId?: string;
+
+  /**
+   * Tags associated with the lookup role
+   *
+   * This information may be used to create IAM policies targeting this role.
+   *
+   * @default DefaultStackSynthesizer.DEFAULT_LOOKUP_ROLE_TAGS
+   */
+  readonly lookupRoleTags?: Record<string, string>;
 
   /**
    * Use the bootstrapped lookup role for (read-only) stack operations
@@ -140,6 +167,15 @@ export interface DefaultStackSynthesizerProps {
    * @default DefaultStackSynthesizer.DEFAULT_DEPLOY_ROLE_ARN
    */
   readonly deployRoleArn?: string;
+
+  /**
+   * Tags associated with the deploy role
+   *
+   * This information may be used to create IAM policies targeting this role.
+   *
+   * @default DefaultStackSynthesizer.DEFAULT_DEPLOY_ROLE_TAGS
+   */
+  readonly deployRoleTags?: Record<string, string>;
 
   /**
    * The role CloudFormation will assume when deploying the Stack
@@ -247,14 +283,34 @@ export class DefaultStackSynthesizer extends StackSynthesizer {
   public static readonly DEFAULT_DEPLOY_ROLE_ARN = 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${Qualifier}-deploy-role-${AWS::AccountId}-${AWS::Region}';
 
   /**
+   * Default deploy role tags
+   */
+  public static readonly DEFAULT_DEPLOY_ROLE_TAGS: Record<string, string> = { 'aws-cdk:bootstrap-role': 'deploy' };
+
+  /**
+   * Default lookup role tags
+   */
+  public static readonly DEFAULT_LOOKUP_ROLE_TAGS: Record<string, string> = { 'aws-cdk:bootstrap-role': 'lookup' };
+
+  /**
    * Default asset publishing role ARN for file (S3) assets.
    */
   public static readonly DEFAULT_FILE_ASSET_PUBLISHING_ROLE_ARN = 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${Qualifier}-file-publishing-role-${AWS::AccountId}-${AWS::Region}';
 
   /**
+   * Default asset publishing role tags for file (S3) assets.
+   */
+  public static readonly DEFAULT_FILE_ASSET_PUBLISHING_ROLE_TAGS: Record<string, string> = { 'aws-cdk:bootstrap-role': 'file-publishing' };
+
+  /**
    * Default asset publishing role ARN for image (ECR) assets.
    */
   public static readonly DEFAULT_IMAGE_ASSET_PUBLISHING_ROLE_ARN = 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${Qualifier}-image-publishing-role-${AWS::AccountId}-${AWS::Region}';
+
+  /**
+   * Default asset publishing role tags for image (ECR) assets.
+   */
+  public static readonly DEFAULT_IMAGE_ASSET_PUBLISHING_ROLE_TAGS: Record<string, string> = { 'aws-cdk:bootstrap-role': 'image-publishing' };
 
   /**
    * Default lookup role ARN for missing values.
@@ -296,7 +352,11 @@ export class DefaultStackSynthesizer extends StackSynthesizer {
   private _deployRoleArn?: string;
   private _cloudFormationExecutionRoleArn?: string;
   private fileAssetPublishingRoleArn?: string;
+  private fileAssetPublishingRoleTags?: Record<string, string>;
   private imageAssetPublishingRoleArn?: string;
+  private imageAssetPublishingRoleTags?: Record<string, string>;
+  private deployRoleTags?: Record<string, string>;
+  private lookupRoleTags?: Record<string, string>;
   private lookupRoleArn?: string;
   private useLookupRoleForStackOperations: boolean;
   private qualifier?: string;
@@ -352,6 +412,10 @@ export class DefaultStackSynthesizer extends StackSynthesizer {
     this.bucketPrefix = spec.specialize(this.props.bucketPrefix ?? DefaultStackSynthesizer.DEFAULT_FILE_ASSET_PREFIX);
     this.dockerTagPrefix = spec.specialize(this.props.dockerTagPrefix ?? DefaultStackSynthesizer.DEFAULT_DOCKER_ASSET_PREFIX);
     this.bootstrapStackVersionSsmParameter = spec.qualifierOnly(this.props.bootstrapStackVersionSsmParameter ?? DefaultStackSynthesizer.DEFAULT_BOOTSTRAP_STACK_VERSION_SSM_PARAMETER);
+    this.fileAssetPublishingRoleTags = this.props.fileAssetPublishingRoleTags ?? DefaultStackSynthesizer.DEFAULT_FILE_ASSET_PUBLISHING_ROLE_TAGS;
+    this.imageAssetPublishingRoleTags = this.props.imageAssetPublishingRoleTags ?? DefaultStackSynthesizer.DEFAULT_IMAGE_ASSET_PUBLISHING_ROLE_TAGS;
+    this.deployRoleTags = this.props.deployRoleTags ?? DefaultStackSynthesizer.DEFAULT_DEPLOY_ROLE_TAGS;
+    this.lookupRoleTags = this.props.lookupRoleTags ?? DefaultStackSynthesizer.DEFAULT_LOOKUP_ROLE_TAGS;
     /* eslint-enable max-len */
   }
 
@@ -363,6 +427,7 @@ export class DefaultStackSynthesizer extends StackSynthesizer {
     return this.assetManifest.addFileAssetDefault(asset, this.stack, this.bucketName, this.bucketPrefix, {
       assumeRoleArn: this.fileAssetPublishingRoleArn,
       assumeRoleExternalId: this.props.fileAssetPublishingExternalId,
+      tags: this.fileAssetPublishingRoleTags,
     });
   }
 
@@ -374,6 +439,7 @@ export class DefaultStackSynthesizer extends StackSynthesizer {
     return this.assetManifest.addDockerImageAssetDefault(asset, this.stack, this.repositoryName, this.dockerTagPrefix, {
       assumeRoleArn: this.imageAssetPublishingRoleArn,
       assumeRoleExternalId: this.props.imageAssetPublishingExternalId,
+      tags: this.imageAssetPublishingRoleTags,
     });
   }
 
@@ -409,6 +475,7 @@ export class DefaultStackSynthesizer extends StackSynthesizer {
     this.emitStackArtifact(this.stack, session, {
       assumeRoleExternalId: this.props.deployRoleExternalId,
       assumeRoleArn: this._deployRoleArn,
+      assumeRoleTags: this.deployRoleTags,
       cloudFormationExecutionRoleArn: this._cloudFormationExecutionRoleArn,
       stackTemplateAssetObjectUrl: templateAsset.s3ObjectUrlWithPlaceholders,
       requiresBootstrapStackVersion: MIN_BOOTSTRAP_STACK_VERSION,
@@ -419,6 +486,7 @@ export class DefaultStackSynthesizer extends StackSynthesizer {
         assumeRoleExternalId: this.props.lookupRoleExternalId,
         requiresBootstrapStackVersion: MIN_LOOKUP_ROLE_BOOTSTRAP_STACK_VERSION,
         bootstrapStackVersionSsmParameter: this.bootstrapStackVersionSsmParameter,
+        tags: this.lookupRoleTags,
       } : undefined,
     });
   }

@@ -91,18 +91,25 @@
                     "type": "string"
                 },
                 "assumeRoleArn": {
-                    "description": "The role that needs to be assumed while publishing this asset (Default - No role will be assumed)",
+                    "description": "The role that needs to be assumed while publishing this asset\n\nThe `assumeRole` fields is the preferred way of passing this information,\nbut this needs to be supported for backwards compatibility. (Default - No role will be assumed)",
                     "type": "string"
                 },
                 "assumeRoleExternalId": {
-                    "description": "The ExternalId that needs to be supplied while assuming this role (Default - No ExternalId will be supplied)",
+                    "description": "The ExternalId that needs to be supplied while assuming this role\n\nThe `assumeRole` fields is the preferred way of passing this information,\nbut this needs to be supported for backwards compatibility. (Default - No ExternalId will be supplied)",
                     "type": "string"
+                },
+                "assumeRoleTags": {
+                    "description": "Tags associated with the given role\n\nThis information may be used to create IAM policies targeting this role. (Default - No tags)",
+                    "$ref": "#/definitions/Record<string,string>"
                 }
             },
             "required": [
                 "bucketName",
                 "objectKey"
             ]
+        },
+        "Record<string,string>": {
+            "type": "object"
         },
         "DockerImageAsset": {
             "description": "A file asset",
@@ -178,12 +185,16 @@
                     "type": "string"
                 },
                 "assumeRoleArn": {
-                    "description": "The role that needs to be assumed while publishing this asset (Default - No role will be assumed)",
+                    "description": "The role that needs to be assumed while publishing this asset\n\nThe `assumeRole` fields is the preferred way of passing this information,\nbut this needs to be supported for backwards compatibility. (Default - No role will be assumed)",
                     "type": "string"
                 },
                 "assumeRoleExternalId": {
-                    "description": "The ExternalId that needs to be supplied while assuming this role (Default - No ExternalId will be supplied)",
+                    "description": "The ExternalId that needs to be supplied while assuming this role\n\nThe `assumeRole` fields is the preferred way of passing this information,\nbut this needs to be supported for backwards compatibility. (Default - No ExternalId will be supplied)",
                     "type": "string"
+                },
+                "assumeRoleTags": {
+                    "description": "Tags associated with the given role\n\nThis information may be used to create IAM policies targeting this role. (Default - No tags)",
+                    "$ref": "#/definitions/Record<string,string>"
                 }
             },
             "required": [

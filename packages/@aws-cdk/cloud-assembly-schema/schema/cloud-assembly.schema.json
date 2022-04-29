@@ -300,12 +300,16 @@
                     "type": "boolean"
                 },
                 "assumeRoleArn": {
-                    "description": "The role that needs to be assumed to deploy the stack (Default - No role is assumed (current credentials are used))",
+                    "description": "The role that needs to be assumed to deploy the stack\n\nThe `assumeRole` field is the preferred way to pass this information, but this field\nneeds to be supported for backwards compatibility. (Default - No role is assumed (current credentials are used))",
                     "type": "string"
                 },
                 "assumeRoleExternalId": {
-                    "description": "External ID to use when assuming role for cloudformation deployments (Default - No external ID)",
+                    "description": "External ID to use when assuming role for cloudformation deployments\n\nThe `assumeRole` field is the preferred way to pass this information, but this field\nneeds to be supported for backwards compatibility. (Default - No external ID)",
                     "type": "string"
+                },
+                "assumeRoleTags": {
+                    "description": "Tags associated with the given role\n\nThis information may be used to create IAM policies targeting this role. (Default - No tags)",
+                    "$ref": "#/definitions/Record<string,string>"
                 },
                 "cloudFormationExecutionRoleArn": {
                     "description": "The role that is passed to CloudFormation to execute the change set (Default - No role is passed (currently assumed role/credentials are used))",
@@ -336,6 +340,9 @@
                 "templateFile"
             ]
         },
+        "Record<string,string>": {
+            "type": "object"
+        },
         "BootstrapRole": {
             "description": "Information needed to access an IAM role created\nas part of the bootstrap process",
             "type": "object",
@@ -355,6 +362,10 @@
                 "bootstrapStackVersionSsmParameter": {
                     "description": "Name of SSM parameter with bootstrap stack version (Default - Discover SSM parameter by reading stack)",
                     "type": "string"
+                },
+                "tags": {
+                    "description": "Tags associated with the given role\n\nThis information may be used to create IAM policies targeting this role. (Default - No tags)",
+                    "$ref": "#/definitions/Record<string,string>"
                 }
             },
             "required": [
