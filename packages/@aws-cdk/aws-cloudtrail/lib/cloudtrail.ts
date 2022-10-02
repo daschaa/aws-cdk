@@ -5,7 +5,7 @@ import * as lambda from '@aws-cdk/aws-lambda';
 import * as logs from '@aws-cdk/aws-logs';
 import * as s3 from '@aws-cdk/aws-s3';
 import * as sns from '@aws-cdk/aws-sns';
-import { Resource, Stack } from '@aws-cdk/core';
+import { Aws, Resource, Stack } from '@aws-cdk/core';
 import { Construct } from 'constructs';
 import { CfnTrail } from './cloudtrail.generated';
 
@@ -229,16 +229,32 @@ export class Trail extends Resource {
       principals: [cloudTrailPrincipal],
     }));
 
-    this.s3bucket.addToResourcePolicy(new iam.PolicyStatement({
-      resources: [this.s3bucket.arnForObjects(
-        `${props.s3KeyPrefix ? `${props.s3KeyPrefix}/` : ''}AWSLogs/${Stack.of(this).account}/*`,
-      )],
-      actions: ['s3:PutObject'],
-      principals: [cloudTrailPrincipal],
-      conditions: {
-        StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
-      },
-    }));
+    if (props.isOrganizationTrail) {
+      this.s3bucket.addToResourcePolicy(new iam.PolicyStatement({
+        resources: [this.s3bucket.arnForObjects(
+          `${props.s3KeyPrefix ? `${props.s3KeyPrefix}/` : ''}AWSLogs/*`,
+        )],
+        actions: ['s3:PutObject'],
+        principals: [cloudTrailPrincipal],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+            'aws:SourceArn': `arn:${Aws.PARTITION}:cloudtrail:${Aws.REGION}:${Aws.ACCOUNT_ID}:trail/${this.physicalName}`,
+          },
+        },
+      }));
+    } else {
+      this.s3bucket.addToResourcePolicy(new iam.PolicyStatement({
+        resources: [this.s3bucket.arnForObjects(
+          `${props.s3KeyPrefix ? `${props.s3KeyPrefix}/` : ''}AWSLogs/${Stack.of(this).account}/*`,
+        )],
+        actions: ['s3:PutObject'],
+        principals: [cloudTrailPrincipal],
+        conditions: {
+          StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
+        },
+      }));
+    }
 
     this.topic = props.snsTopic;
     if (this.topic) {

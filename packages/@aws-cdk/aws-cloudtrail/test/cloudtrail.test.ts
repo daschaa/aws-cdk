@@ -667,6 +667,112 @@ describe('cloudtrail', () => {
           IsMultiRegionTrail: true,
         }));
       });
+
+      test('when isOrganizationTrail is set then the correct policy is set', () => {
+        const stack = getTestStack();
+
+        new Trail(stack, 'OrganizationTrail', {
+          isOrganizationTrail: true,
+        });
+
+        Template.fromStack(stack).hasResourceProperties('AWS::CloudTrail::Trail', Match.objectEquals({
+          IsOrganizationTrail: true,
+          IsLogging: true,
+          S3BucketName: Match.anyValue(),
+          EnableLogFileValidation: true,
+          EventSelectors: [],
+          IncludeGlobalServiceEvents: true,
+          IsMultiRegionTrail: true,
+        }));
+
+        Template.fromStack(stack).hasResourceProperties('AWS::S3::BucketPolicy', {
+          Bucket: { Ref: 'OrganizationTrailS39966E64E' },
+          PolicyDocument: {
+            Statement: [
+              {
+                Action: 's3:*',
+                Condition: {
+                  Bool: {
+                    'aws:SecureTransport': 'false',
+                  },
+                },
+                Effect: 'Deny',
+                Principal: {
+                  AWS: '*',
+                },
+                Resource: [
+                  {
+                    'Fn::GetAtt': [
+                      'OrganizationTrailS39966E64E',
+                      'Arn',
+                    ],
+                  },
+                  {
+                    'Fn::Join': [
+                      '',
+                      [
+                        {
+                          'Fn::GetAtt': [
+                            'OrganizationTrailS39966E64E',
+                            'Arn',
+                          ],
+                        },
+                        '/*',
+                      ],
+                    ],
+                  },
+                ],
+              },
+              {
+                Action: 's3:GetBucketAcl',
+                Effect: 'Allow',
+                Principal: { Service: 'cloudtrail.amazonaws.com' },
+                Resource: { 'Fn::GetAtt': ['OrganizationTrailS39966E64E', 'Arn'] },
+              },
+              {
+                Action: 's3:PutObject',
+                Condition: {
+                  StringEquals: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
+                    'aws:SourceArn': {
+                      'Fn::Join': [
+                        '',
+                        [
+                          'arn:',
+                          {
+                            Ref: 'AWS::Partition',
+                          },
+                          ':cloudtrail:',
+                          {
+                            Ref: 'AWS::Region',
+                          },
+                          ':',
+                          {
+                            Ref: 'AWS::AccountId',
+                          },
+                          ':trail/',
+                        ],
+                      ],
+                    },
+                  },
+                },
+                Effect: 'Allow',
+                Principal: { Service: 'cloudtrail.amazonaws.com' },
+                Resource: {
+                  'Fn::Join': [
+                    '',
+                    [
+                      { 'Fn::GetAtt': ['OrganizationTrailS39966E64E', 'Arn'] },
+                      '/AWSLogs/*',
+                    ],
+                  ],
+                },
+              },
+            ],
+            Version: '2012-10-17',
+          },
+        });
+      });
     });
   });
 
